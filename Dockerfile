@@ -14,6 +14,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /go/bin/server ./
 # Create a minimal container to run a Golang static binary
 FROM scratch
 
+ENV GIN_MODE=release
+
 # Copy our static executable.
 COPY --from=builder /go/bin/server /server
 
