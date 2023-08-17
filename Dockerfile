@@ -1,32 +1,22 @@
-# Start from a Debian image with the latest version of Go installed
-# and a workspace (GOPATH) configured at /go.
-FROM golang:alpine
-RUN apk add git ca-certificates --update
+FROM golang:1-alpine as builder
 
-# fetch dependencies github
-# RUN go get -u github.com/gin-gonic/gin
+WORKDIR /usr/src/app
 
-ADD . /go/src/github.com/AgoraIO-Community/agora-token-service
+# pre-copy/cache go.mod for pre-downloading dependencies and only redownloading them in subsequent builds if they change
+COPY go.mod go.sum ./
+RUN go mod download && go mod verify
 
-# # fetch dependencies from github (Gin and Agora Token Service)
-# RUN go install github.com/gin-gonic/gin@latest
-# # RUN go install github.com/AgoraIO-Community/agora-token-service
-# ADD . /go/src/github.com/AgoraIO-Community/agora-token-service
+COPY . .
 
-ARG APP_ID
-ARG APP_CERTIFICATE
-ARG SERVER_PORT
-ENV APP_ID $APP_ID
-ENV APP_CERTIFICATE $APP_CERTIFICATE
-ENV SERVER_PORT $SERVER_PORT
+# Create a static binary
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /go/bin/server ./cmd/main.go
 
-# move to the working directory
-WORKDIR $GOPATH/src/github.com/AgoraIO-Community/agora-token-service
-# Build the token server command inside the container.
-RUN go build -o agora-token-service -v cmd/main.go
-# RUN go run main.go
-# Run the token server by default when the container starts.
-ENTRYPOINT ./agora-token-service
+# Create a minimal container to run a Golang static binary
+FROM scratch
 
-# Document that the service listens on port 8080.
+# Copy our static executable.
+COPY --from=builder /go/bin/server /server
+
 EXPOSE 8080
+
+ENTRYPOINT ["/server"]
